@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>文档知识库 · RAG 工作流</title>
+<style>
+  :root {
+    --bg:#f5f7fa; --card:#fff; --border:#e4e8ef; --text:#1f2937; --muted:#6b7280;
+    --primary:#2563eb; --primary-soft:#eff6ff; --green:#16a34a; --red:#ef4444; --amber:#d97706;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:"Segoe UI","Microsoft YaHei",sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
+  header{background:var(--card);border-bottom:1px solid var(--border);padding:14px 32px;display:flex;align-items:center;gap:12px}
+  header h1{font-size:18px;font-weight:600}
+  header .sub{color:var(--muted);font-size:12px;margin-left:auto}
+  nav{max-width:1180px;margin:16px auto 0;padding:0 24px;display:flex;gap:8px}
+  nav button{padding:9px 20px;border:1px solid var(--border);background:var(--card);border-radius:8px 8px 0 0;cursor:pointer;font-size:14px;color:var(--muted);border-bottom:none}
+  nav button.active{color:var(--primary);font-weight:600;border-color:var(--primary)}
+  .wrap{max-width:1180px;margin:0 auto 40px;padding:0 24px}
+  .page{display:none;background:var(--card);border:1px solid var(--border);border-radius:0 12px 12px 12px;padding:22px}
+  .page.active{display:block}
+  .card{background:#fbfcfe;border:1px solid var(--border);border-radius:10px;padding:16px;margin-bottom:16px}
+  .card h2{font-size:14px;margin-bottom:12px;display:flex;align-items:center;gap:8px}
+  .badge{background:var(--primary-soft);color:var(--primary);font-size:11px;padding:2px 8px;border-radius:10px}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  .grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px}
+  table{width:100%;border-collapse:collapse;font-size:12.5px}
+  th,td{border-bottom:1px solid var(--border);padding:7px 8px;text-align:left;word-break:break-all}
+  th{color:var(--muted);font-weight:500;background:#f7f9fb}
+  input,select{padding:9px 11px;border:1px solid var(--border);border-radius:8px;font-size:13px;outline:none}
+  input:focus{border-color:var(--primary)}
+  button.btn{padding:9px 18px;background:var(--primary);color:#fff;border:none;border-radius:8px;font-size:13px;cursor:pointer}
+  button.btn.btn-sm{padding:3px 10px;font-size:12px;border-radius:6px}
+  button.btn.btn-danger{background:#d9534f}
+  button.btn:hover{background:#1d4ed8}
+  button.btn.ghost{background:#fff;color:var(--text);border:1px solid var(--border)}
+  button.btn.small{padding:5px 10px;font-size:12px}
+  .muted{color:var(--muted);font-size:12px}
+  .ok{color:var(--green);font-weight:600}
+  .bad{color:var(--red);font-weight:600}
+  .search-row{display:flex;gap:10px;margin-bottom:8px}
+  .search-row input{flex:1}
+  .pipeline{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0 12px;font-size:12px}
+  .pipeline .step{background:var(--primary-soft);color:var(--primary);padding:3px 10px;border-radius:12px}
+  .result{border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:10px;background:#fff}
+  .result .meta{display:flex;gap:10px;flex-wrap:wrap;font-size:11.5px;margin-bottom:6px;align-items:center}
+  .result .score{color:var(--green);font-weight:600}
+  .result .text{font-size:13px;line-height:1.7;white-space:pre-wrap;word-break:break-word}
+  .result mark{background:#fde68a;padding:0 1px;border-radius:2px}
+  .answer{background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:14px 16px;margin-bottom:12px;font-size:13.5px;line-height:1.8;white-space:pre-wrap}
+  #drop{border:2px dashed #c3cdd9;border-radius:10px;padding:24px;text-align:center;color:var(--muted);cursor:pointer}
+  #drop.hover{border-color:var(--primary);background:var(--primary-soft)}
+  .status{font-size:12px;padding:2px 8px;border-radius:10px}
+  .st-ready{background:#dcfce7;color:var(--green)} .st-processing{background:#fef9c3;color:var(--amber)}
+  .st-rolled_back{background:#fee2e2;color:var(--red)} .st-failed{background:#fee2e2;color:var(--red)}
+  .st-archived{background:#e5e7eb;color:var(--muted)}
+  .fb button{border:1px solid var(--border);background:#fff;border-radius:6px;cursor:pointer;padding:3px 10px;font-size:12px;margin-right:6px}
+  .toast{position:fixed;top:18px;left:50%;transform:translateX(-50%);background:#1f2937;color:#fff;padding:10px 18px;border-radius:8px;font-size:13px;opacity:0;transition:.3s;pointer-events:none;z-index:99}
+  .toast.show{opacity:1}
+  @media(max-width:900px){.grid2,.grid3{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<header>
+  <h1>📚 文档知识库 · RAG 工作流</h1>
+  <span class="sub">增量入库 · 多路召回 · 重排 · 评估门禁</span>
+</header>
+<nav>
+  <button class="active" data-page="search">🔍 检索问答</button>
+  <button data-page="docs">📄 文档管理</button>
+  <button data-page="ops">🧪 评估与运维</button>
+</nav>
+<div class="wrap">
+
+<!-- ============ 检索问答 ============ -->
+<div class="page active" id="page-search">
+  <div class="card">
+    <h2>语义检索 <span class="badge">Query预处理 → 路由 → 多路召回 → Rerank</span></h2>
+    <div class="search-row">
+      <input id="query" placeholder="输入一句话，例如：大狙的价格是多少 / 出差住宿限额 / 冥驹伤害">
+      <button class="btn" onclick="doSearch()">检 索</button>
+      <button class="btn ghost" onclick="doAnswer()">生成回答</button>
+    </div>
+    <div class="pipeline" id="pipeline"></div>
+    <div id="answerBox"></div>
+    <div id="results"></div>
+  </div>
+</div>
+
+<!-- ============ 文档管理 ============ -->
+<div class="page" id="page-docs">
+  <div class="card">
+    <h2>上传文档 <span class="badge">SHA256指纹 → 增量入库 → 评估门禁</span></h2>
+    <div id="drop"><div style="font-size:26px;margin-bottom:4px">📄</div>点击选择或拖拽文件（PDF / docx / txt / md）</div>
+    <input type="file" id="fileInput" accept=".pdf,.txt,.md,.docx" multiple hidden>
+    <div class="muted" id="uploading" style="margin-top:8px;min-height:16px"></div>
+  </div>
+  <div class="card">
+    <h2>已入库文档</h2>
+    <table id="docTable"><thead><tr>
+      <th>文档</th><th>版本</th><th>状态</th><th>有效片段</th><th>退役片段</th><th>指纹(前8位)</th><th>更新时间</th><th>操作</th>
+    </tr></thead><tbody></tbody></table>
+  </div>
+</div>
+
+<!-- ============ 评估与运维 ============ -->
+<div class="page" id="page-ops">
+  <div class="grid2">
+    <div class="card">
+      <h2>QA 评估集 <span class="badge">上线门禁数据源</span></h2>
+      <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap">
+        <input id="evQ" placeholder="问题" style="flex:2;min-width:140px">
+        <input id="evDoc" placeholder="期望文档" style="flex:1;min-width:110px">
+        <input id="evKw" placeholder="关键词,逗号分隔" style="flex:1;min-width:130px">
+        <button class="btn" onclick="addEval()">添加</button>
+      </div>
+      <table id="evalTable"><thead><tr><th>问题</th><th>期望文档</th><th>关键词</th><th>来源</th><th>操作</th></tr></thead><tbody></tbody></table>
+    </div>
+    <div class="card">
+      <h2>评估结果 <span class="badge">Recall / MRR / Precision</span></h2>
+      <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap">
+        <button class="btn" onclick="runEval()">▶ 运行评估</button>
+        <button class="btn ghost" onclick="setBaseline()">设为基线</button>
+        <span class="muted" id="baselineInfo"></span>
+      </div>
+      <div id="evalMetrics" class="muted">尚未运行</div>
+    </div>
+  </div>
+  <div class="grid2">
+    <div class="card">
+      <h2>别名管理 <span class="badge">Query 扩展（如 冥驹↔大狙）</span></h2>
+      <div style="display:flex;gap:8px;margin-bottom:10px">
+        <input id="alEntity" placeholder="规范实体（大狙）" style="flex:1">
+        <input id="alAlias" placeholder="别名（冥驹）" style="flex:1">
+        <button class="btn" onclick="addAlias()">添加</button>
+      </div>
+      <div id="aliasList" style="display:flex;gap:6px;flex-wrap:wrap"></div>
+    </div>
+    <div class="card">
+      <h2>定时运维</h2>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
+        <button class="btn ghost" onclick="maintenance('cleanup')">🧹 物理清理退役片段（>7天）</button>
+        <button class="btn ghost" onclick="maintenance('backup')">💾 备份元数据快照</button>
+      </div>
+      <h2 style="margin-top:8px">查询日志与反馈</h2>
+      <table id="logTable"><thead><tr><th>Query</th><th>意图</th><th>路由</th><th>反馈</th></tr></thead><tbody></tbody></table>
+    </div>
+  </div>
+</div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+const $=id=>document.getElementById(id);
+function toast(m){const t=$('toast');t.textContent=m;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2600)}
+document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{
+  document.querySelectorAll('nav button').forEach(x=>x.classList.remove('active'));
+  document.querySelectorAll('.page').forEach(x=>x.classList.remove('active'));
+  b.classList.add('active');$('page-'+b.dataset.page).classList.add('active');
+});
+
+/* ---------- 检索 ---------- */
+function highlight(t,q){const kw=q.trim().split(/\s+/).filter(w=>w.length>1);
+  let h=t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  for(const w of kw)h=h.split(w).join('<mark>'+w+'</mark>');return h}
+
+function showResults(data,q){
+  const pipe=$('pipeline');
+  pipe.innerHTML='';
+  const steps=[`意图: ${data.intent}`,'路由: '+(data.route||[]).join(' + '),
+    ...(data.entities&&data.entities.length?['实体: '+data.entities.join(',')]:[]),
+    ...(data.expansion&&data.expansion.length?['扩展: +'+data.expansion.join(',')]:[]),
+    ...(data.structured&&data.structured.length?['SQL命中: '+data.structured.length+' 行']:[])];
+  steps.forEach(s=>{const sp=document.createElement('span');sp.className='step';sp.textContent=s;pipe.appendChild(sp)});
+  let html='';
+  if(data.answer){html+=`<div class="answer"><b>💡 回答</b>（模式：${data.answer_mode}）\n${data.answer}</div>`}
+  if(!data.results||!data.results.length){html+='<div class="muted" style="padding:20px;text-align:center">未找到相关内容</div>'}
+  data.results.forEach(r=>{
+    html+=`<div class="result"><div class="meta">
+      <span class="score">相关度 ${(r.score*100).toFixed(1)}%</span>
+      <span class="muted">${r.citation||''}</span>
+      <span class="muted">类型 ${r.ctype}</span></div>
+      <div class="text">${highlight(r.text,q)}</div></div>`;
+  });
+  $('results').innerHTML=html;
+  if(data.log_id){
+    $('results').insertAdjacentHTML('beforeend',
+      `<div class="fb" style="margin-top:6px">这条结果对您有帮助？
+       <button onclick="sendFeedback(${data.log_id},'good')">👍</button>
+       <button onclick="sendFeedback(${data.log_id},'bad')">👎</button></div>`);
+  }
+}
+async function doSearch(){
+  const q=$('query').value.trim();if(!q)return toast('请输入查询');
+  $('results').innerHTML='<div class="muted" style="padding:16px;text-align:center">检索中…</div>';
+  const r=await fetch(`/api/search?q=${encodeURIComponent(q)}`);showResults(await r.json(),q);
+}
+async function doAnswer(){
+  const q=$('query').value.trim();if(!q)return toast('请输入查询');
+  $('results').innerHTML='<div class="muted" style="padding:16px;text-align:center">检索并生成中…</div>';
+  const r=await fetch(`/api/answer?q=${encodeURIComponent(q)}`);showResults(await r.json(),q);
+}
+async function sendFeedback(id,f){
+  await fetch('/api/feedback',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({log_id:id,feedback:f})});
+  toast(f==='good'?'感谢反馈！':'已记录，问题自动加入评估集');loadLogs();
+}
+
+/* ---------- 文档管理 ---------- */
+const drop=$('drop'),fi=$('fileInput');
+drop.onclick=()=>fi.click();
+drop.ondragover=e=>{e.preventDefault();drop.classList.add('hover')};
+drop.ondragleave=()=>drop.classList.remove('hover');
+drop.ondrop=e=>{e.preventDefault();drop.classList.remove('hover');uploadFiles(e.dataTransfer.files)};
+fi.onchange=()=>uploadFiles(fi.files);
+async function uploadFiles(files){
+  for(const f of files){
+    $('uploading').textContent='⏳ 入库中：'+f.name+'（解析→分块→编码→评估门禁）';
+    const fd=new FormData();fd.append('file',f);
+    const r=await fetch('/api/upload',{method:'POST',body:fd});const d=await r.json();
+    if(!r.ok){toast('❌ '+(d.detail||'上传失败'));continue}
+    const icon={ready:'✅',unchanged:'⏭️',rolled_back:'⚠️',failed:'❌'}[d.status]||'ℹ️';
+    toast(`${icon} ${f.name}: ${d.status}`+(d.chunks?`，${d.chunks} 片段`:'')+(d.eval?`，Recall=${d.eval.recall_at_k}`:''));
+  }
+  $('uploading').textContent='';fi.value='';loadDocs();
+}
+async function loadDocs(){
+  const r=await fetch('/api/docs');const d=await r.json();
+  const tb=$('docTable').querySelector('tbody');tb.innerHTML='';
+  d.docs.forEach(x=>{
+    tb.insertAdjacentHTML('beforeend',`<tr>
+      <td>${x.name}</td><td>v${x.version}</td>
+      <td><span class="status st-${x.status}">${x.status}</span></td>
+      <td>${x.active_chunks||0}</td><td>${x.retired_chunks||0}</td>
+      <td class="muted">${(x.fingerprint||'').slice(0,8)}</td>
+      <td class="muted">${x.updated_at}</td>
+      <td>${x.status!=='archived'?`<button class="btn small ghost" onclick="delDoc('${x.doc_id}')">归档</button>`:''}</td></tr>`);
+  });
+}
+async function delDoc(id){
+  if(!confirm('确认归档该文档？所有片段将软删除（可回滚）。'))return;
+  await fetch('/api/docs/'+id,{method:'DELETE'});toast('已归档');loadDocs();
+}
+
+/* ---------- 评估 ---------- */
+async function addEval(){
+  const q=$('evQ').value.trim();if(!q)return toast('请输入问题');
+  await fetch('/api/eval',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({question:q,expected_doc:$('evDoc').value.trim()||null,
+      expected_keywords:$('evKw').value.split(/[,，]/).map(s=>s.trim()).filter(Boolean)})});
+  $('evQ').value='';toast('已添加');loadEval();
+}
+async function loadEval(){
+  const r=await fetch('/api/eval');const d=await r.json();
+  const tb=$('evalTable').querySelector('tbody');tb.innerHTML='';
+  d.items.forEach(x=>tb.insertAdjacentHTML('beforeend',
+    `<tr><td>${x.question}</td><td>${x.expected_doc||'-'}</td>
+     <td class="muted">${x.expected_keywords.join(', ')||'-'}</td>
+     <td><span class="status ${x.source==='auto'?'st-rolled_back':'st-ready'}">${x.source}</span></td>
+     <td><button class="btn btn-sm btn-danger" onclick="delEval(${x.id})">删除</button></td></tr>`));
+  const b=await (await fetch('/api/eval/baseline')).json();
+  $('baselineInfo').textContent=b.baseline?`基线 Recall=${b.baseline.recall_at_k} MRR=${b.baseline.mrr}`:'未设置基线';
+}
+async function delEval(id){
+  if(!confirm('确定删除这条评估标注吗？'))return;
+  await fetch('/api/eval/'+id,{method:'DELETE'});
+  toast('已删除');loadEval();
+}
+async function runEval(){
+  $('evalMetrics').textContent='评估中…';
+  const r=await (await fetch('/api/eval/run',{method:'POST'})).json();
+  const m=r.metrics;
+  $('evalMetrics').innerHTML=`<table><tr><th>评估集</th><th>Recall@K</th><th>Keyword Recall</th><th>MRR</th><th>Precision@K</th></tr>
+    <tr><td>${m.eval_size} 题</td><td class="ok">${m.recall_at_k}</td><td>${m.keyword_recall}</td><td>${m.mrr}</td><td>${m.precision_at_k}</td></tr></table>
+    <div style="margin-top:8px">${r.details.map(d=>`<div>· ${d.hit?'<span class="ok">✓</span>':'<span class="bad">✗</span>'} ${d.question} ${d.hit?'(rank '+d.rank+')':`<span class="muted">top1: ${d.top_source||'无'}</span>`}</div>`).join('')}</div>`;
+  loadEval();
+}
+async function setBaseline(){
+  const r=await (await fetch('/api/eval/set_baseline',{method:'POST'})).json();
+  toast('基线已设置：Recall='+r.metrics.recall_at_k+' MRR='+r.metrics.mrr);loadEval();
+}
+
+/* ---------- 别名 / 运维 ---------- */
+async function addAlias(){
+  const e=$('alEntity').value.trim(),a=$('alAlias').value.trim();
+  if(!e||!a)return toast('请填写实体和别名');
+  await fetch('/api/aliases',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({entity:e,alias:a})});
+  $('alEntity').value='';$('alAlias').value='';toast('已添加');loadAliases();
+}
+async function loadAliases(){
+  const d=await (await fetch('/api/aliases')).json();
+  $('aliasList').innerHTML=d.aliases.map(a=>
+    `<span class="status st-ready">${a.alias} → ${a.entity}
+      <a href="javascript:void(0)" style="margin-left:4px;color:var(--bad,#d33);font-weight:700"
+         onclick="delAlias(${a.id})" title="删除">×</a></span>`).join('')||'<span class="muted">暂无</span>';
+}
+async function delAlias(id){
+  await fetch('/api/aliases/'+id,{method:'DELETE'});
+  toast('已删除别名');loadAliases();
+}
+async function maintenance(action){
+  const r=await (await fetch('/api/maintenance/'+action,{method:'POST'})).json();
+  toast(action==='cleanup'?`已物理清理 ${r.removed} 个退役片段`:`已备份：${r.backup}`);loadLogs();
+}
+async function loadLogs(){
+  const d=await (await fetch('/api/logs?limit=20')).json();
+  const tb=$('logTable').querySelector('tbody');tb.innerHTML='';
+  d.logs.forEach(l=>tb.insertAdjacentHTML('beforeend',
+    `<tr><td>${l.query}</td><td>${l.intent}</td><td class="muted">${l.route}</td>
+     <td>${l.feedback==='good'?'👍':l.feedback==='bad'?'👎':'<span class="muted">-</span>'}</td></tr>`));
+}
+$('query').addEventListener('keyup',e=>{if(e.key==='Enter')doSearch()});
+loadDocs();loadEval();loadAliases();loadLogs();
+</script>
+</body>
+</html>

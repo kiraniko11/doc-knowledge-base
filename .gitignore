@@ -1,0 +1,17 @@
+# 模型文件（306MB，超过 GitHub 限制，按 README 指引下载）
+models/
+
+# 运行时数据与用户上传文件
+storage/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# 测试临时文件
+test_kb.txt
+
+# 系统
+.DS_Store
+Thumbs.db
